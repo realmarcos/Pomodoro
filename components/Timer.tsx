@@ -1,111 +1,196 @@
+import { CircularProgress } from '@/components/CircularProgress';
+import { TagPicker } from '@/components/TagPicker';
+import { HistoryContext } from '@/contexts/HistoryContext';
+import { SettingsContext } from '@/contexts/SettingsContext';
+import { Tag, TagsContext } from '@/contexts/TagsContext';
+import { ThemeContext } from '@/contexts/ThemeContext';
+import { playAmbientSound, playNotificationSound, stopSound } from '@/utils/sounds';
 import { Feather } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
-import React, { useContext, useEffect, useState } from 'react';
-import { Alert, Text, TouchableOpacity, View } from 'react-native';
-import { ThemeContext } from '../contexts/ThemeContext';
+import { AudioPlayer } from 'expo-audio';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { Alert, Dimensions, Text, TouchableOpacity, View } from 'react-native';
 
-const FOCUS_MINUTES = 25;
-const BREAK_MINUTES = 5;
+const { width } = Dimensions.get('window');
+const TIMER_SIZE = width * 0.75;
+const STROKE_WIDTH = 12;
 
 export const Timer = () => {
   const { theme } = useContext(ThemeContext);
-  const [timeLeft, setTimeLeft] = useState(FOCUS_MINUTES * 60);
+  const { focusMinutes, breakMinutes, autoStartBreak, selectedSoundId } = useContext(SettingsContext);
+  const { tags } = useContext(TagsContext);
+  const { addSession } = useContext(HistoryContext);
+
+  const [totalSeconds, setTotalSeconds] = useState(focusMinutes * 60);
+  const [timeLeft, setTimeLeft] = useState(focusMinutes * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(true);
+  const [selectedTag, setSelectedTag] = useState<Tag | null>(tags[0] || null);
+  const [showTagPicker, setShowTagPicker] = useState(false);
 
+  const bgSoundRef = useRef<AudioPlayer | null>(null);
   const isDark = theme === 'dark';
 
-  // Gerenciamento do cronômetro
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRunning && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0) {
-      handleTimeEnd();
+    if (!isRunning) {
+      const newTotal = (isFocusMode ? focusMinutes : breakMinutes) * 60;
+      setTotalSeconds(newTotal);
+      setTimeLeft(newTotal);
     }
-    return () => clearInterval(interval);
-  }, [isRunning, timeLeft]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusMinutes, breakMinutes]);
 
-  const playSound = async () => {
-    const { sound } = await Audio.Sound.createAsync(
-      require('../assets/meldix-success-340660.mp3') 
-    );
-    await sound.playAsync();
-  };
-
-  const handleTimeEnd = () => {
+  const handleTimeEnd = async () => {
     setIsRunning(false);
-    playSound();
-    
+    await stopSound(bgSoundRef.current);
+    bgSoundRef.current = null;
+    await playNotificationSound();
+
+    addSession({
+      date: new Date().toISOString(),
+      duration: isFocusMode ? focusMinutes : breakMinutes,
+      tagName: selectedTag?.name || 'Sem etiqueta',
+      tagColor: selectedTag?.color || '#999',
+      tagIcon: selectedTag?.icon || 'clock',
+      type: isFocusMode ? 'focus' : 'break',
+    });
+
     if (isFocusMode) {
-      Alert.alert("Parabéns!", "Sessão de foco concluída. Hora de descansar!", [
-        { text: "Iniciar Descanso", onPress: () => switchMode(false) }
+      Alert.alert('🎉 Parabéns!', 'Sessão de foco concluída! Hora de descansar.', [
+        { text: 'Iniciar Descanso', onPress: () => switchMode(false, autoStartBreak) },
+        { text: 'Fechar', style: 'cancel' },
       ]);
     } else {
-      Alert.alert("Fim do Descanso", "Pronto para voltar ao foco?", [
-        { text: "Iniciar Foco", onPress: () => switchMode(true) }
+      Alert.alert('☕ Fim do Descanso', 'Pronto para voltar ao foco?', [
+        { text: 'Iniciar Foco', onPress: () => switchMode(true, false) },
+        { text: 'Fechar', style: 'cancel' },
       ]);
     }
   };
 
-  const switchMode = (focus: boolean) => {
+  useEffect(() => {
+    let interval: any;
+
+    if (isRunning && timeLeft > 0) {
+      interval = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+    } else if (isRunning && timeLeft === 0) {
+      handleTimeEnd();
+    }
+
+    return () => clearInterval(interval);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning, timeLeft]);
+
+  useEffect(() => {
+    if (isRunning && selectedSoundId !== 'none' && isFocusMode) {
+      (async () => {
+        stopSound(bgSoundRef.current);
+        bgSoundRef.current = await playAmbientSound(selectedSoundId);
+      })();
+    } else {
+      stopSound(bgSoundRef.current);
+      bgSoundRef.current = null;
+    }
+    return () => {
+      stopSound(bgSoundRef.current);
+    };
+  }, [isRunning, selectedSoundId, isFocusMode]);
+
+  const switchMode = (focus: boolean, autoStart: boolean = false) => {
     setIsFocusMode(focus);
-    setTimeLeft((focus ? FOCUS_MINUTES : BREAK_MINUTES) * 60);
-    setIsRunning(false);
+    const newTotal = (focus ? focusMinutes : breakMinutes) * 60;
+    setTotalSeconds(newTotal);
+    setTimeLeft(newTotal);
+    setIsRunning(autoStart);
   };
 
   const toggleTimer = () => setIsRunning(!isRunning);
-  
-  const resetTimer = () => {
+
+  const resetTimer = async () => {
     setIsRunning(false);
-    setTimeLeft((isFocusMode ? FOCUS_MINUTES : BREAK_MINUTES) * 60);
+    await stopSound(bgSoundRef.current);
+    bgSoundRef.current = null;
+    const newTotal = (isFocusMode ? focusMinutes : breakMinutes) * 60;
+    setTotalSeconds(newTotal);
+    setTimeLeft(newTotal);
   };
 
-  // Formatação do tempo (MM:SS)
-  const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-  const seconds = (timeLeft % 60).toString().padStart(2, '0');
-
-  // Estilos dinâmicos baseados no modo e no tema
-  const modeColor = isFocusMode ? 'bg-primary' : 'bg-break';
+  const progress = totalSeconds > 0 ? (totalSeconds - timeLeft) / totalSeconds : 0;
+  const minutesDisplay = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const secondsDisplay = (timeLeft % 60).toString().padStart(2, '0');
+  const modeColor = isFocusMode ? '#FF6B6B' : '#4ECDC4';
+  const modeBg = isFocusMode ? 'bg-primary' : 'bg-break';
   const textColor = isDark ? 'text-white' : 'text-slate-800';
-  const containerBg = isDark ? 'bg-darkBg' : 'bg-lightBg';
 
   return (
-    <View className={`flex-1 items-center justify-center ${containerBg}`}>
-      
-      {/* Etiqueta / Status */}
-      <View className="mb-10 px-4 py-2 rounded-full bg-slate-200 dark:bg-darkCard flex-row items-center">
-        <Feather name={isFocusMode ? "briefcase" : "coffee"} size={18} color={isFocusMode ? "#FF6B6B" : "#4ECDC4"} />
+    <View className={`flex-1 items-center justify-center ${isDark ? 'bg-darkBg' : 'bg-lightBg'}`}>
+      <TouchableOpacity
+        onPress={() => setShowTagPicker(true)}
+        className={`mb-8 px-5 py-2.5 rounded-full flex-row items-center ${isDark ? 'bg-darkCard' : 'bg-white'} shadow-sm`}
+      >
+        {selectedTag && (
+          <View
+            className="w-6 h-6 rounded-full items-center justify-center mr-2"
+            style={{ backgroundColor: selectedTag.color + '30' }}
+          >
+            <Feather name={selectedTag.icon as any} size={14} color={selectedTag.color} />
+          </View>
+        )}
+        <Feather name={isFocusMode ? 'target' : 'coffee'} size={16} color={modeColor} />
         <Text className={`ml-2 font-semibold ${textColor}`}>
-          {isFocusMode ? "Sessão de Foco" : "Tempo de Descanso"}
+          {isFocusMode ? 'Foco' : 'Descanso'}
+          {selectedTag ? ` · ${selectedTag.name}` : ''}
         </Text>
-      </View>
+        <Feather name="chevron-down" size={16} color={isDark ? '#aaa' : '#666'} style={{ marginLeft: 6 }} />
+      </TouchableOpacity>
 
-      {/* Círculo do Timer Principal */}
-      <View className={`w-72 h-72 rounded-full border-8 items-center justify-center ${isFocusMode ? 'border-primary' : 'border-break'} bg-transparent`}>
-        <Text className={`text-6xl font-bold ${textColor}`}>
-          {minutes}:{seconds}
-        </Text>
-      </View>
+      <CircularProgress
+        size={TIMER_SIZE}
+        strokeWidth={STROKE_WIDTH}
+        progress={progress}
+        color={modeColor}
+        bgColor={isDark ? '#333' : '#E5E7EB'}
+      >
+        <View className="items-center">
+          <Text className={`text-6xl font-bold ${textColor}`}>
+            {minutesDisplay}:{secondsDisplay}
+          </Text>
+          <Text className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            {isFocusMode ? `${focusMinutes} min de foco` : `${breakMinutes} min de descanso`}
+          </Text>
+        </View>
+      </CircularProgress>
 
-      {/* Botões de Ação */}
-      <View className="flex-row mt-12 space-x-6">
-        <TouchableOpacity 
-          onPress={toggleTimer}
-          className={`w-20 h-20 rounded-full items-center justify-center shadow-lg ${modeColor}`}
-        >
-          <Feather name={isRunning ? "pause" : "play"} size={32} color="white" />
-        </TouchableOpacity>
-
-        <TouchableOpacity 
+      <View className="flex-row items-center mt-12 gap-6">
+        <TouchableOpacity
           onPress={resetTimer}
-          className="w-20 h-20 rounded-full items-center justify-center bg-slate-300 dark:bg-slate-700 shadow-lg"
+          className={`w-14 h-14 rounded-full items-center justify-center ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}
         >
-          <Feather name="square" size={24} color={isDark ? "white" : "#333"} />
+          <Feather name="rotate-ccw" size={22} color={isDark ? '#fff' : '#555'} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={toggleTimer}
+          className={`w-20 h-20 rounded-full items-center justify-center shadow-lg ${modeBg}`}
+          style={{ elevation: 8 }}
+        >
+          <Feather name={isRunning ? 'pause' : 'play'} size={32} color="white" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => switchMode(!isFocusMode)}
+          className={`w-14 h-14 rounded-full items-center justify-center ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}
+        >
+          <Feather name="skip-forward" size={22} color={isDark ? '#fff' : '#555'} />
         </TouchableOpacity>
       </View>
+
+      <TagPicker
+        visible={showTagPicker}
+        onClose={() => setShowTagPicker(false)}
+        onSelect={setSelectedTag}
+        selectedTagId={selectedTag?.id}
+      />
     </View>
   );
 };

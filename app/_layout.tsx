@@ -1,27 +1,28 @@
 import "../global.css";
 
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import 'react-native-reanimated';
-
-import { ThemeContext } from '@/contexts/ThemeContext';
+import { HistoryProvider } from '@/contexts/HistoryContext';
+import { SettingsProvider } from '@/contexts/SettingsContext';
+import { TagsProvider } from '@/contexts/TagsContext';
+import { ThemeContext, ThemeProvider } from '@/contexts/ThemeContext';
 import { Feather } from '@expo/vector-icons';
-import { useContext } from 'react';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { Stack } from 'expo-router';
+import React, { useContext } from 'react';
 import { TouchableOpacity } from 'react-native';
+import 'react-native-reanimated';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-export default function RootLayout() {
+function RootLayoutNav() {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === 'dark';
 
   return (
-    <ThemeProvider value={DefaultTheme}  >
+    <NavThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <Stack
         screenOptions={{
-          // Estilização dinâmica do header com base no tema
           headerStyle: {
             backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF',
           },
@@ -33,30 +34,38 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen
-          name="index"
+          name="(tabs)"
           options={{
             title: 'Pomodoro',
             headerRight: () => (
               <TouchableOpacity onPress={toggleTheme} className="p-2">
-                <Feather name={isDark ? "sun" : "moon"} size={24} color={isDark ? "#FFF" : "#333"} />
+                <Feather name={isDark ? 'sun' : 'moon'} size={24} color={isDark ? '#FFF' : '#333'} />
               </TouchableOpacity>
             ),
           }}
         />
         <Stack.Screen
-          name="settings"
+          name="modal"
           options={{
-            title: 'Configurações',
-            presentation: 'modal' // Abre de baixo para cima no iOS (opcional)
-          }}
-        />
-        <Stack.Screen
-          name="history"
-          options={{
-            title: 'Histórico'
+            title: 'Modal',
+            presentation: 'modal',
           }}
         />
       </Stack>
+    </NavThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <SettingsProvider>
+        <TagsProvider>
+          <HistoryProvider>
+            <RootLayoutNav />
+          </HistoryProvider>
+        </TagsProvider>
+      </SettingsProvider>
     </ThemeProvider>
   );
 }

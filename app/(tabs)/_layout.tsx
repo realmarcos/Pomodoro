@@ -1,42 +1,50 @@
+import { ThemeContext } from '@/contexts/ThemeContext';
+import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React, { useContext } from 'react';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { theme } = useContext(ThemeContext);
+  const isDark = theme === 'dark';
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: '#FF6B6B',
+        tabBarInactiveTintColor: isDark ? '#888' : '#999',
+        tabBarStyle: {
+          backgroundColor: isDark ? '#1E1E1E' : '#FFFFFF',
+          borderTopColor: isDark ? '#333' : '#eee',
+        },
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Timer',
+          tabBarIcon: ({ color }) => <Feather name="clock" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="tags"
+        options={{
+          title: 'Etiquetas',
+          tabBarIcon: ({ color }) => <Feather name="tag" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: 'Histórico',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="setting"
         options={{
-          title: "Configurações",
-          tabBarIcon: ({ color }) => <MaterialIcons size={28} name='settings' color={color} />
+          title: 'Ajustes',
+          tabBarIcon: ({ color }) => <Feather name="settings" size={24} color={color} />,
         }}
       />
     </Tabs>
