@@ -6,7 +6,7 @@ import { Tag, TagsContext } from '@/contexts/TagsContext';
 import { ThemeContext } from '@/contexts/ThemeContext';
 import { playAmbientSound, playNotificationSound, stopSound } from '@/utils/sounds';
 import { Feather } from '@expo/vector-icons';
-import { AudioPlayer } from 'expo-audio';
+import { AudioPlayer, setAudioModeAsync } from 'expo-audio';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Alert, Dimensions, Text, TouchableOpacity, View } from 'react-native';
 
@@ -26,9 +26,15 @@ export const Timer = () => {
   const [isFocusMode, setIsFocusMode] = useState(true);
   const [selectedTag, setSelectedTag] = useState<Tag | null>(tags[0] || null);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(selectedSoundId !== 'none');
 
   const bgSoundRef = useRef<AudioPlayer | null>(null);
   const isDark = theme === 'dark';
+
+  // Configure audio mode for silent mode playback
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true });
+  }, []);
 
   useEffect(() => {
     if (!isRunning) {
@@ -82,7 +88,7 @@ export const Timer = () => {
   }, [isRunning, timeLeft]);
 
   useEffect(() => {
-    if (isRunning && selectedSoundId !== 'none' && isFocusMode) {
+    if (isRunning && isSoundEnabled && selectedSoundId !== 'none' && isFocusMode) {
       (async () => {
         stopSound(bgSoundRef.current);
         bgSoundRef.current = await playAmbientSound(selectedSoundId);
@@ -94,7 +100,11 @@ export const Timer = () => {
     return () => {
       stopSound(bgSoundRef.current);
     };
-  }, [isRunning, selectedSoundId, isFocusMode]);
+  }, [isRunning, isSoundEnabled, selectedSoundId, isFocusMode]);
+
+  const toggleSound = () => {
+    setIsSoundEnabled(prev => !prev);
+  };
 
   const switchMode = (focus: boolean, autoStart: boolean = false) => {
     setIsFocusMode(focus);
@@ -184,6 +194,23 @@ export const Timer = () => {
           <Feather name="skip-forward" size={22} color={isDark ? '#fff' : '#555'} />
         </TouchableOpacity>
       </View>
+
+      {/* Sound toggle */}
+      {selectedSoundId !== 'none' && (
+        <TouchableOpacity
+          onPress={toggleSound}
+          className={`mt-6 flex-row items-center px-4 py-2.5 rounded-full ${isDark ? 'bg-darkCard' : 'bg-white'} shadow-sm`}
+        >
+          <Feather
+            name={isSoundEnabled ? 'volume-2' : 'volume-x'}
+            size={18}
+            color={isSoundEnabled ? modeColor : (isDark ? '#666' : '#999')}
+          />
+          <Text className={`ml-2 text-sm font-medium ${isSoundEnabled ? (isDark ? 'text-white' : 'text-slate-700') : 'text-slate-400'}`}>
+            {isSoundEnabled ? 'Som ligado' : 'Som desligado'}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <TagPicker
         visible={showTagPicker}

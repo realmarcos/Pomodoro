@@ -10,9 +10,9 @@ export interface AmbientSound {
 export const AMBIENT_SOUNDS: AmbientSound[] = [
   { id: 'none', name: 'Nenhum', icon: 'volume-x' },
   { id: 'rain', name: 'Chuva', icon: 'cloud-rain' },
-  { id: 'waves', name: 'Ondas do Mar', icon: 'wind' },
-  { id: 'fire', name: 'Lareira', icon: 'sunset' },
-  { id: 'white-noise', name: 'Ruído Branco', icon: 'radio' },
+  { id: 'forest', name: 'Floresta', icon: 'trees' },
+  { id: 'fireplace', name: 'Lareira', icon: 'sunset' },
+  // { id: 'white-noise', name: 'Ruído Branco', icon: 'radio' },
   { id: 'lofi', name: 'Lo-Fi', icon: 'headphones' },
 ];
 
